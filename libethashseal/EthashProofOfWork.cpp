@@ -35,6 +35,6 @@ const EthashProofOfWork::WorkPackage EthashProofOfWork::NullWorkPackage = Ethash
 
 EthashProofOfWork::WorkPackage::WorkPackage(BlockHeader const& _bh):
 	boundary(Ethash::boundary(_bh)),
-	headerHash(_bh.hash(WithoutSeal)),
-	seedHash(Ethash::seedHash(_bh))
+	seedHash(Ethash::seedHash(_bh)),
+	m_headerHash(_bh.hash(WithoutSeal))
 {}
