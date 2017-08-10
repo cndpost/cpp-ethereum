@@ -42,6 +42,7 @@ Ethash::Ethash()
 	m_farm.setSealers(sealers);
 	m_farm.onSolutionFound([=](EthashProofOfWork::Solution const& sol)
 	{
+		Guard l(x_submit);
 //		cdebug << m_farm.work().seedHash << m_farm.work().headerHash << sol.nonce << EthashAux::eval(m_farm.work().seedHash, m_farm.work().headerHash, sol.nonce).value;
 		setMixHash(m_sealing, sol.mixHash);
 		setNonce(m_sealing, sol.nonce);
