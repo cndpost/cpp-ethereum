@@ -43,7 +43,7 @@ enum class WhenError
 };
 
 template <class Iterator>
-std::string toHex(Iterator _it, Iterator _end, std::string _prefix)
+std::string toHex(Iterator _it, Iterator _end, std::string const& _prefix)
 {
 	typedef std::iterator_traits<Iterator> traits;
 	static_assert(sizeof(typename traits::value_type) == 1, "toHex needs byte-sized element type");
@@ -208,9 +208,6 @@ unsigned commonPrefix(T const& _t, _U const& _u)
 	return s;
 }
 
-/// Creates a random, printable, word.
-std::string randomWord();
-
 /// Determine bytes required to encode the given integer value. @returns 0 if @a _i is zero.
 template <class T>
 inline unsigned bytesRequired(T _i)
@@ -242,49 +239,28 @@ void pushFront(T& _t, _U _e)
 	_t[0] = _e;
 }
 
-/// Concatenate two vectors of elements of POD types.
-template <class T>
-inline std::vector<T>& operator+=(std::vector<typename std::enable_if<std::is_pod<T>::value, T>::type>& _a, std::vector<T> const& _b)
+/// Concatenate the contents of a container onto a vector.
+template <class T, class U>
+inline std::vector<T>& operator+=(std::vector<T>& _a, U const& _b)
 {
-	auto s = _a.size();
-	_a.resize(_a.size() + _b.size());
-	memcpy(_a.data() + s, _b.data(), _b.size() * sizeof(T));
-	return _a;
-
-}
-
-/// Concatenate two vectors of elements.
-template <class T>
-inline std::vector<T>& operator+=(std::vector<typename std::enable_if<!std::is_pod<T>::value, T>::type>& _a, std::vector<T> const& _b)
-{
-	_a.reserve(_a.size() + _b.size());
-	for (auto& i: _b)
-		_a.push_back(i);
-	return _a;
+    _a.insert(_a.end(), std::begin(_b), std::end(_b));
+    return _a;
 }
 
 /// Insert the contents of a container into a set
-template <class T, class U> std::set<T>& operator+=(std::set<T>& _a, U const& _b)
+template <class T, class U>
+std::set<T>& operator+=(std::set<T>& _a, U const& _b)
 {
-	for (auto const& i: _b)
-		_a.insert(i);
-	return _a;
+    _a.insert(std::begin(_b), std::end(_b));
+    return _a;
 }
 
 /// Insert the contents of a container into an unordered_set
-template <class T, class U> std::unordered_set<T>& operator+=(std::unordered_set<T>& _a, U const& _b)
+template <class T, class U>
+std::unordered_set<T>& operator+=(std::unordered_set<T>& _a, U const& _b)
 {
-	for (auto const& i: _b)
-		_a.insert(i);
-	return _a;
-}
-
-/// Concatenate the contents of a container onto a vector
-template <class T, class U> std::vector<T>& operator+=(std::vector<T>& _a, U const& _b)
-{
-	for (auto const& i: _b)
-		_a.push_back(i);
-	return _a;
+    _a.insert(std::begin(_b), std::end(_b));
+    return _a;
 }
 
 /// Insert the contents of a container into a set
@@ -305,48 +281,6 @@ template <class T, class U> std::vector<T> operator+(std::vector<T> _a, U const&
 	return _a += _b;
 }
 
-/// Concatenate two vectors of elements.
-template <class T>
-inline std::vector<T> operator+(std::vector<T> const& _a, std::vector<T> const& _b)
-{
-	std::vector<T> ret(_a);
-	return ret += _b;
-}
-
-/// Merge two sets of elements.
-template <class T>
-inline std::set<T>& operator+=(std::set<T>& _a, std::set<T> const& _b)
-{
-	for (auto& i: _b)
-		_a.insert(i);
-	return _a;
-}
-
-/// Merge two sets of elements.
-template <class T>
-inline std::set<T> operator+(std::set<T> const& _a, std::set<T> const& _b)
-{
-	std::set<T> ret(_a);
-	return ret += _b;
-}
-
-template <class A, class B>
-std::unordered_map<A, B>& operator+=(std::unordered_map<A, B>& _x, std::unordered_map<A, B> const& _y)
-{
-	for (auto const& i: _y)
-		_x.insert(i);
-	return _x;
-}
-
-template <class A, class B>
-std::unordered_map<A, B> operator+(std::unordered_map<A, B> const& _x, std::unordered_map<A, B> const& _y)
-{
-	std::unordered_map<A, B> ret(_x);
-	return ret += _y;
-}
-
-/// Make normal string from fixed-length string.
-std::string toString(string32 const& _s);
 
 template<class T, class U>
 std::vector<T> keysOf(std::map<T, U> const& _m)
@@ -392,4 +326,27 @@ bool contains(T const& _t, V const& _v)
 	return std::end(_t) != std::find(std::begin(_t), std::end(_t), _v);
 }
 
+template <class V>
+bool contains(std::unordered_set<V> const& _set, V const& _v)
+{
+    return _set.find(_v) != _set.end();
+}
+
+template <class K, class V>
+bool contains(std::unordered_map<K, V> const& _map, K const& _k)
+{
+    return _map.find(_k) != _map.end();
+}
+
+template <class V>
+bool contains(std::set<V> const& _set, V const& _v)
+{
+    return _set.find(_v) != _set.end();
+}
+
+template <class K, class V>
+bool contains(std::map<K, V> const& _map, K const& _k)
+{
+    return _map.find(_k) != _map.end();
+}
 }

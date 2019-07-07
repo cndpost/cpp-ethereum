@@ -18,11 +18,14 @@
  * Fixture class for boost output when running testeth
  */
 
-#include <boost/test/unit_test.hpp>
 #include <libethashseal/Ethash.h>
 #include <libethcore/BasicAuthority.h>
-#include <test/tools/libtesteth/TestOutputHelper.h>
 #include <test/tools/libtesteth/Options.h>
+#include <test/tools/libtesteth/TestOutputHelper.h>
+#include <boost/filesystem.hpp>
+#include <boost/io/ios_state.hpp>
+#include <boost/test/unit_test.hpp>
+#include <numeric>
 
 using namespace std;
 using namespace dev;
@@ -30,56 +33,42 @@ using namespace dev::test;
 using namespace dev::eth;
 using namespace boost;
 
-Timer TestOutputHelper::m_timer;
-size_t TestOutputHelper::m_currTest = 0;
-size_t TestOutputHelper::m_maxTests = 0;
-string TestOutputHelper::m_currentTestName = "n/a";
-string TestOutputHelper::m_currentTestCaseName = "n/a";
-string TestOutputHelper::m_currentTestFileName = "n/a";
-std::vector<TestOutputHelper::execTimeName> TestOutputHelper::m_execTimeResults;
-void TestOutputHelper::initTest(int _maxTests)
+void TestOutputHelper::initTest(size_t _maxTests)
 {
 	Ethash::init();
-	BasicAuthority::init();
 	NoProof::init();
-	m_timer.restart();
+	BasicAuthority::init();
+	m_currentTestName = "n/a";
+	m_currentTestFileName = string();
+    m_timer = Timer();
 	m_currentTestCaseName = boost::unit_test::framework::current_test_case().p_name;
-	std::cout << "Test Case \"" + m_currentTestCaseName + "\": " << std::endl;
+	if (!Options::get().createRandomTest)
+		std::cout << "Test Case \"" + m_currentTestCaseName + "\": \n";
 	m_maxTests = _maxTests;
 	m_currTest = 0;
 }
 
-void TestOutputHelper::initTest(json_spirit::mValue& _v)
+bool TestOutputHelper::checkTest(std::string const& _testName)
 {
-	Ethash::init();
-	BasicAuthority::init();
-	NoProof::init();
-	m_timer.restart();
-	m_currentTestCaseName = boost::unit_test::framework::current_test_case().p_name;
-	std::cout << "Test Case \"" + m_currentTestCaseName + "\": " << std::endl;
-	m_maxTests = _v.get_obj().size();
-	m_currTest = 0;
+	if (test::Options::get().singleTest && test::Options::get().singleTestName != _testName)
+		return false;
+
+	m_currentTestName = _testName;
+	return true;
 }
 
-bool TestOutputHelper::passTest(std::string const& _testName)
+void TestOutputHelper::showProgress()
 {
 	m_currTest++;
 	int m_testsPerProgs = std::max(1, (int)(m_maxTests / 4));
-	if (m_currTest % m_testsPerProgs == 0 || m_currTest ==  m_maxTests)
+	if (!test::Options::get().createRandomTest && (m_currTest % m_testsPerProgs == 0 || m_currTest ==  m_maxTests))
 	{
 		int percent = int(m_currTest*100/m_maxTests);
 		std::cout << percent << "%";
 		if (percent != 100)
 			std::cout << "...";
-		std::cout << std::endl;
+		std::cout << "\n";
 	}
-
-	if (test::Options::get().singleTest && test::Options::get().singleTestName != _testName)
-		return false;
-
-	cnote << _testName;
-	m_currentTestName = _testName;
-	return true;
 }
 
 void TestOutputHelper::finishTest()
@@ -89,18 +78,115 @@ void TestOutputHelper::finishTest()
 		execTimeName res;
 		res.first = m_timer.elapsed();
 		res.second = caseName();
-		std::cout << res.second + " time: " + toString(res.first) << std::endl;
+		std::cout << res.second + " time: " + toString(res.first) << "\n";
 		m_execTimeResults.push_back(res);
 	}
 }
 
 void TestOutputHelper::printTestExecStats()
 {
-	if (Options::get().exectimelog)
-	{
-		std::cout << std::left;
-		std::sort(m_execTimeResults.begin(), m_execTimeResults.end(), [](execTimeName _a, execTimeName _b) { return (_b.first < _a.first); });
-		for (size_t i = 0; i < m_execTimeResults.size(); i++)
-			std::cout << setw(45) << m_execTimeResults[i].second << setw(25) << " time: " + toString(m_execTimeResults[i].first) << std::endl;
-	}
+    checkUnfinishedTestFolders();
+    if (Options::get().exectimelog)
+    {
+        boost::io::ios_flags_saver saver(cout);
+        std::cout << std::left;
+        std::sort(m_execTimeResults.begin(), m_execTimeResults.end(), [](execTimeName _a, execTimeName _b) { return (_b.first < _a.first); });
+        int totalTime = std::accumulate(m_execTimeResults.begin(), m_execTimeResults.end(), 0,
+                            [](int a, execTimeName const& b)
+                            {
+                                return a + b.first;
+                            });
+        std::cout << setw(45) << "Total Time: " << setw(25) << "     : " + toString(totalTime) << "\n";
+        for (auto const& t: m_execTimeResults)
+            std::cout << setw(45) << t.second << setw(25) << " time: " + toString(t.first) << "\n";
+        saver.restore();
+    }
+}
+
+// check if a boost path contain no test files
+bool pathHasTests(boost::filesystem::path const& _path)
+{
+    using fsIterator = boost::filesystem::directory_iterator;
+    for (fsIterator it(_path); it != fsIterator(); ++it)
+    {
+        // if the extention of a test file
+        if (boost::filesystem::is_regular_file(it->path()) &&
+            (it->path().extension() == ".json" || it->path().extension() == ".yml"))
+        {
+            // if the filename ends with Filler/Copier type
+            std::string const name = it->path().stem().filename().string();
+            std::string const suffix =
+                (name.length() > 7) ? name.substr(name.length() - 6) : string();
+            if (suffix == "Filler" || suffix == "Copier")
+                return true;
+        }
+    }
+    return false;
+}
+
+void TestOutputHelper::checkUnfinishedTestFolders()
+{
+    // -t SuiteName/caseName   parse caseName as filter
+    // rCurrentTestSuite is empty if run without -t argument
+    string filter;
+    size_t pos = Options::get().rCurrentTestSuite.find('/');
+    if (pos != string::npos)
+        filter = Options::get().rCurrentTestSuite.substr(pos + 1);
+
+    if (!filter.empty())
+    {
+        if (m_finishedTestFoldersMap.size() > 1)
+        {
+            std::cerr << "ERROR: Expected a single test to be passed: " << filter << "\n";
+            return;
+        }
+
+        // Unit tests does not mark test folders
+        if (m_finishedTestFoldersMap.size() == 0)
+            return;
+
+        std::map<boost::filesystem::path, FolderNameSet>::const_iterator it =
+            m_finishedTestFoldersMap.begin();
+        if (!pathHasTests(it->first / filter))
+            std::cerr << "WARNING: Test folder " << it->first / filter
+                      << " appears to have no tests!"
+                      << "\n";
+    }
+    else
+    {
+        for (auto const& allTestsIt : m_finishedTestFoldersMap)
+        {
+            boost::filesystem::path path = allTestsIt.first;
+            set<string> allFolders;
+            using fsIterator = boost::filesystem::directory_iterator;
+            for (fsIterator it(path); it != fsIterator(); ++it)
+            {
+                if (boost::filesystem::is_directory(*it))
+                {
+                    allFolders.insert(it->path().filename().string());
+                    if (!pathHasTests(it->path()))
+                        std::cerr << "WARNING: Test folder " << it->path()
+                                  << " appears to have no tests!"
+                                  << "\n";
+                }
+            }
+
+            std::vector<string> diff;
+            FolderNameSet finishedFolders = allTestsIt.second;
+            std::set_difference(allFolders.begin(), allFolders.end(), finishedFolders.begin(),
+                finishedFolders.end(), std::back_inserter(diff));
+            for (auto const& it : diff)
+            {
+                std::cerr << "WARNING: Test folder " << path / it << " appears to be unused!"
+                          << "\n";
+            }
+        }
+    }
+}
+
+void TestOutputHelper::markTestFolderAsFinished(
+    boost::filesystem::path const& _suitePath, string const& _folderName)
+{
+    // Mark test folder _folderName as finished for the test suite path _suitePath
+    m_finishedTestFoldersMap[_suitePath].emplace(_folderName);
 }

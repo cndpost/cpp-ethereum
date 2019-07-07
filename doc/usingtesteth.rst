@@ -56,16 +56,16 @@ If you need to debug a specific test on a specific network rules use this comman
    
 Currently network names <NET_NAME> are following: Frontier, Homestead, EIP150, EIP158, Byzantine, Constantinople
 
-The main test suites are <TEST_SUITE>: StateTestsGeneral, BlockchainTests, TransitionTests, TransactionTests, VMTests
+The main test suites are <TEST_SUITE>: GeneralStateTests, BlockchainTests, TransitionTests, TransactionTests, VMTests
 
 <TEST_CASE> correspond to a folder name in the tests repo. And <TEST_NAME> correspond to the filename in that folder describing a specific test. 
 
-StateTestsGeneral has a single transaction being executed on a given pre state to produce a post state. 
-This transaction has arrays <data>, <value>, <gasLimit>. So a single test execute transaction with different arguments taken from those arrays to test different conditions on the same pre state. To run a transaction from the StateTestsGeneral with the specified arguments use: 
+GeneralStateTests has a single transaction being executed on a given pre state to produce a post state. 
+This transaction has arrays <data>, <value>, <gasLimit>. So a single test execute transaction with different arguments taken from those arrays to test different conditions on the same pre state. To run a transaction from the GeneralStateTests with the specified arguments use: 
 
    ``./testeth -t <TEST_SUITE>/<TEST_CASE> -- --singletest <TEST_NAME> --singlenet <NET_NAME> -d <DATA_INDEX> -g <GASLIMIT_INDEX> -v <VALUE_INDEX>``
    
-This will run a transaction with given data, gasLimit, and value as described in the test on a given network rules. Note that parameters here are indexes. The actual values described in the test file itself. This is only valid when <TEST_SUITE> is StateTestsGeneral. 
+This will run a transaction with given data, gasLimit, and value as described in the test on a given network rules. Note that parameters here are indexes. The actual values described in the test file itself. This is only valid when <TEST_SUITE> is GeneralStateTests. 
  
 Debugging and tracing a state test
 --------------------------------------------------------------------------------
@@ -75,7 +75,7 @@ Use following options:
 
    ``./testeth -t <TEST_SUITE>/<TEST_CASE> -- --vmtrace --verbosity 5``
    
-``--vmtrace`` prints a step by step execution log from the EVM. Make sure that you've run cmake with -DVMTRACE=1 flag.
+``--vmtrace`` prints a step by step execution log from the EVM.
 
    ``./testeth -t <TEST_SUITE>/<TEST_CASE> -- --jsontrace <CONFIG>``
    
@@ -102,14 +102,11 @@ Note that some tests are disabled by default. Such as Frontier, Homestead rules 
    ``./testeth -- --all``
 
 
-Generating(Filling) the tests
+Generating (filling) the tests
 --------------------------------------------------------------------------------
 
-Tests are generated from test filler files located in the src folder of the test repo. Testeth will run the execution of a *Filler.json file and produce a final test in the repo.
-``--filltests`` option will rerun test creation. .json files will be overwritten, hashes recalculated and a fresh build info will be added to the tests.  
+Tests are generated from test filler files located in the src folder of the test repo. Testeth will run the execution of a ``Filler.json`` file and produce a final test in the repo.
 
-    ``./testeth -t <TEST_SUITE>/<TEST_CASE> --filltests --checkstate --all``
+Generating a test case and creating new tests is a whole new topic and it's described in more detail here: 
 
-If some test case has different results than it is expected to have (an expect section is specified in the *Filler.json file) then you will see an error in the cmd log. This error indicates that something went different and the post state does not match the expect section. So you should check the test and it's expect section. Generating a test case and creating new tests is rather a whole new topic and it's described in more detail here: 
-
-   https://github.com/ethereum/cpp-ethereum/blob/develop/doc/generating_tests.rst
+   https://ethereum-tests.readthedocs.io/en/latest/generating-tests.html

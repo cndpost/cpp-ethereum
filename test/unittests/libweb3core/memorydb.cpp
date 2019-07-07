@@ -1,214 +1,254 @@
 /*
-	This file is part of cpp-ethereum.
+    This file is part of cpp-ethereum.
 
-	cpp-ethereum is free software: you can redistribute it and/or modify
-	it under the terms of the GNU General Public License as published by
-	the Free Software Foundation, either version 3 of the License, or
-	(at your option) any later version.
+    cpp-ethereum is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
 
-	cpp-ethereum is distributed in the hope that it will be useful,
-	but WITHOUT ANY WARRANTY; without even the implied warranty of
-	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-	GNU General Public License for more details.
+    cpp-ethereum is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
 
-	You should have received a copy of the GNU General Public License
-	along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+    You should have received a copy of the GNU General Public License
+    along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** @file MemoryDB.cpp
- * @author Christoph Jentzsch <cj@ethdev.com>
- * @date 2015
- * memDB test functions.
- */
 
-#include <boost/test/unit_test.hpp>
-#include <iostream>
 #include <libdevcore/MemoryDB.h>
-#include <test/tools/libtesteth/TestHelper.h>
+
+#include <gtest/gtest.h>
 
 using namespace std;
-using namespace dev;
-using namespace dev::test;
+using namespace dev::db;
 
-namespace dev {  namespace test {
-
-
-} }// Namespace Close
-
-BOOST_FIXTURE_TEST_SUITE(memDB, TestOutputHelper)
-
-BOOST_AUTO_TEST_CASE(kill)
+namespace
 {
-	MemoryDB myDB;
-	BOOST_CHECK(myDB.get().empty());
-	bytes value = fromHex("43");
-	myDB.insert(h256(42), &value);
-	BOOST_CHECK(myDB.exists(h256(42)));
-	BOOST_CHECK_EQUAL(myDB.get().size(), 1);
-	BOOST_CHECK(!myDB.kill(h256(43)));
-	BOOST_CHECK(myDB.kill(h256(42)));
+array<pair<string, string>, 3> g_testData = {{{"Foo", "Bar"}, {"Baz", "Qux"}, {"Hello", "world"}}};
 }
 
-BOOST_AUTO_TEST_CASE(purgeMainMem)
+TEST(MemoryDB, defaultEmpty)
 {
-	MemoryDB myDB;
-	BOOST_CHECK(myDB.get().empty());
-	bytes value = fromHex("43");
-
-	myDB.insert(h256(42), &value);
-	MemoryDB copy;
-	copy = myDB;
-	BOOST_CHECK(myDB.exists(h256(42)));
-	BOOST_CHECK_EQUAL(myDB.lookup(h256(42)), toString(value[0]));
-	BOOST_CHECK_EQUAL(myDB.get().size(), 1);
-	BOOST_CHECK(myDB.kill(h256(42)));
-
-	BOOST_CHECK(myDB.get() == copy.get());
-	BOOST_CHECK(myDB.exists(h256(42)));
-	BOOST_CHECK_EQUAL(myDB.lookup(h256(42)), toString(value[0]));
-
-	BOOST_CHECK_EQUAL(myDB.get().size(), 1);
-	myDB.purge();
-	BOOST_CHECK_EQUAL(myDB.get().size(), 0);
-	myDB.insert(h256(43), &value);
-	BOOST_CHECK_EQUAL(myDB.get().size(), 1);
-	myDB.clear();
-	BOOST_CHECK_EQUAL(myDB.get().size(), 0);
+    unique_ptr<MemoryDB> db(new MemoryDB());
+    ASSERT_TRUE(db);
+    EXPECT_TRUE(!db->size());
 }
 
-BOOST_AUTO_TEST_CASE(purgeMainMem_Refs)
+TEST(MemoryDB, insertAndKillSingle)
 {
-	MemoryDB myDB;
-	{
-		EnforceRefs enforceRefs(myDB, true);
+    unique_ptr<MemoryDB> db(new MemoryDB());
+    ASSERT_TRUE(db);
+    string testKey("foo");
+    string testVal("bar");
 
-		BOOST_CHECK(myDB.get().empty());
-		bytes value = fromHex("43");
+    size_t insertedCount = 0;
+    db->insert(Slice(testKey), Slice(testVal));
+    EXPECT_EQ(++insertedCount, db->size());
+    EXPECT_TRUE(db->exists(Slice(testKey)));
+    EXPECT_EQ(testVal, db->lookup(Slice(testKey)));
 
-		myDB.insert(h256(42), &value);
-		MemoryDB copy;
-		copy = myDB;
-		BOOST_CHECK(myDB.exists(h256(42)));
-		BOOST_CHECK_EQUAL(myDB.lookup(h256(42)), toString(value[0]));
-		BOOST_CHECK_EQUAL(myDB.get().size(), 1);
-		BOOST_CHECK(myDB.kill(h256(42)));
-
-		BOOST_CHECK(myDB.get() != copy.get());
-		BOOST_CHECK(!myDB.exists(h256(42)));
-		BOOST_CHECK_EQUAL(myDB.lookup(h256(42)), std::string());
-
-		BOOST_CHECK_EQUAL(myDB.get().size(), 0);
-		myDB.purge();
-		BOOST_CHECK_EQUAL(myDB.get().size(), 0);
-		myDB.insert(h256(43), &value);
-		BOOST_CHECK_EQUAL(myDB.get().size(), 1);
-		myDB.clear();
-		BOOST_CHECK_EQUAL(myDB.get().size(), 0);
-		// call EnforceRefs destructor
-	}
-
-	// do same tests again without EnforceRefs
-	BOOST_CHECK(myDB.get().empty());
-	bytes value = fromHex("43");
-
-	myDB.insert(h256(42), &value);
-	MemoryDB copy;
-	copy = myDB;
-	BOOST_CHECK(myDB.exists(h256(42)));
-	BOOST_CHECK_EQUAL(myDB.lookup(h256(42)), toString(value[0]));
-	BOOST_CHECK_EQUAL(myDB.get().size(), 1);
-	BOOST_CHECK(myDB.kill(h256(42)));
-
-	BOOST_CHECK(myDB.get() == copy.get());
-	BOOST_CHECK(myDB.exists(h256(42)));
-	BOOST_CHECK_EQUAL(myDB.lookup(h256(42)), toString(value[0]));
-
-	BOOST_CHECK_EQUAL(myDB.get().size(), 1);
-	myDB.purge();
-	BOOST_CHECK_EQUAL(myDB.get().size(), 0);
-	myDB.insert(h256(43), &value);
-	BOOST_CHECK_EQUAL(myDB.get().size(), 1);
-	myDB.clear();
-	BOOST_CHECK_EQUAL(myDB.get().size(), 0);
+    db->kill(Slice(testKey));
+    EXPECT_EQ(--insertedCount, db->size());
+    EXPECT_TRUE(!db->exists(Slice(testKey)));
+    EXPECT_EQ("", db->lookup(Slice(testKey)));
 }
 
-BOOST_AUTO_TEST_CASE(purgeAuxMem)
+TEST(MemoryDB, InsertAndKillMultiple)
 {
-	class AuxMemDB : public MemoryDB
-	{
-	public:
-		std::unordered_map<h256, std::pair<bytes, bool>> getAux() { return m_aux;}
-	};
+    unique_ptr<MemoryDB> db(new MemoryDB());
+    ASSERT_TRUE(db);
 
-	AuxMemDB myDB;
-	BOOST_CHECK(myDB.get().empty());
-	bytes value = fromHex("43");
+    // Insert keys/values and verify insertion
+    size_t insertedCount = 0;
+    for (auto const& data : g_testData)
+    {
+        db->insert(Slice(data.first), Slice(data.second));
+        EXPECT_EQ(++insertedCount, db->size());
+        EXPECT_TRUE(db->exists(Slice(data.first)));
+        EXPECT_EQ(data.second, db->lookup(Slice(data.first)));
+    }
 
-	myDB.insertAux(h256(42), &value);
-	BOOST_CHECK(myDB.lookupAux(h256(42)) == value);
-	BOOST_CHECK_EQUAL(myDB.get().size(), 0);
-	myDB.removeAux(h256(42));
-	BOOST_CHECK(myDB.lookupAux(h256(42)) == value);
-	BOOST_CHECK_EQUAL(myDB.getAux().size(), 1);
-	myDB.purge();
-	BOOST_CHECK(myDB.lookupAux(h256(42)) == bytes());
-	BOOST_CHECK_EQUAL(myDB.getAux().size(), 0);
-	myDB.insertAux(h256(43), &value);
-	BOOST_CHECK_EQUAL(myDB.getAux().size(), 1);
-	myDB.clear();
-	BOOST_CHECK_EQUAL(myDB.getAux().size(), 0);
+    // Kill keys/values and verify deletion
+    for (auto const& data : g_testData)
+    {
+        db->kill(Slice(data.first));
+        EXPECT_EQ(--insertedCount, db->size());
+        EXPECT_TRUE(!db->exists(Slice(data.first)));
+        EXPECT_EQ("", db->lookup(Slice(data.first)));
+    }
 }
 
-BOOST_AUTO_TEST_CASE(copy)
+TEST(MemoryDB, ForEachComplete)
 {
-	MemoryDB myDB;
-	BOOST_CHECK(myDB.get().empty());
-	bytes value = fromHex("43");
-	myDB.insert(h256(42), &value);
-	BOOST_CHECK(myDB.exists(h256(42)));
-	BOOST_CHECK_EQUAL(myDB.get().size(), 1);
+    unique_ptr<MemoryDB> db(new MemoryDB());
+    ASSERT_TRUE(db);
+    array<string, 3> testData = {{"foo", "bar", "baz"}};
 
-	MemoryDB copyToDB;
-	copyToDB = myDB;
-	BOOST_CHECK(copyToDB.exists(h256(42)));
-	BOOST_CHECK_EQUAL(copyToDB.get().size(), 1);
-	BOOST_CHECK(myDB.keys() == copyToDB.keys());
-	BOOST_CHECK(myDB.get() == copyToDB.get());
-	myDB.insert(h256(43), &value);
-	BOOST_CHECK(myDB.keys() != copyToDB.keys());
+    // Insert keys and verify insertion
+    size_t insertedCount = 0;
+    for (auto const& data : testData)
+    {
+        db->insert(Slice(data), Slice(data));
+        EXPECT_EQ(++insertedCount, db->size());
+        EXPECT_TRUE(db->exists(Slice(data)));
+        EXPECT_EQ(data, db->lookup(Slice(data)));
+    }
+
+    size_t matchedCount = 0;
+    db->forEach([&matchedCount](Slice const& key, Slice const& value) {
+        if (key.toString() == value.toString())
+        {
+            matchedCount++;
+            return true;
+        }
+        return false;
+    });
+    EXPECT_EQ(testData.size(), matchedCount);
 }
 
-BOOST_AUTO_TEST_CASE(lookUp)
+TEST(MemoryDB, ForEachTerminateEarly)
 {
-	MemoryDB myDB;
-	BOOST_CHECK(myDB.get().empty());
-	bytes value = fromHex("43");
+    unique_ptr<MemoryDB> db(new MemoryDB());
+    ASSERT_TRUE(db);
 
-	myDB.insert(h256(42), &value);
-	BOOST_CHECK(myDB.exists(h256(42)));
-	BOOST_CHECK_EQUAL(myDB.lookup(h256(42)), toString(value[0]));
-	BOOST_CHECK_EQUAL(myDB.get().size(), 1);
+    // Insert keys and verify insertion
+    size_t insertedCount = 0;
+    for (auto const& data : g_testData)
+    {
+        db->insert(Slice(data.first), Slice(data.second));
+        EXPECT_EQ(++insertedCount, db->size());
+        EXPECT_TRUE(db->exists(Slice(data.first)));
+        EXPECT_EQ(data.second, db->lookup(Slice(data.first)));
+    }
 
-	myDB.insert(h256(0), &value);
-	BOOST_CHECK(myDB.exists(h256(0)));
-	BOOST_CHECK_EQUAL(myDB.lookup(h256(0)), toString(value[0]));
-
-	myDB.insert(h256(std::numeric_limits<u256>::max()), &value);
-	BOOST_CHECK(myDB.exists(h256(std::numeric_limits<u256>::max())));
-	BOOST_CHECK_EQUAL(myDB.lookup(h256(std::numeric_limits<u256>::max())), toString(value[0]));
-
-	BOOST_CHECK_EQUAL(myDB.get().size(), 3);
+    size_t matchedCount = 0;
+    db->forEach([&matchedCount](Slice const& key, Slice const& value) {
+        if (key.toString() == value.toString())
+        {
+            matchedCount++;
+            return true;
+        }
+        return false;
+    });
+    EXPECT_TRUE(!matchedCount);
 }
 
-BOOST_AUTO_TEST_CASE(stream)
+// Write batch tests
+
+TEST(MemoryDB, defaultEmptyWriteBatch)
 {
-	MemoryDB myDB;
-	BOOST_CHECK(myDB.get().empty());
-	bytes value = fromHex("43");
-	myDB.insert(h256(42), &value);
-	myDB.insert(h256(43), &value);
-	std::ostringstream stream;
-	stream << myDB;
-	BOOST_CHECK_EQUAL(stream.str(), "000000000000000000000000000000000000000000000000000000000000002a: 0x43 43\n000000000000000000000000000000000000000000000000000000000000002b: 0x43 43\n");
+    unique_ptr<MemoryDB> db(new MemoryDB());
+    ASSERT_TRUE(db);
+    unique_ptr<WriteBatchFace> writeBatch = db->createWriteBatch();
+    ASSERT_TRUE(writeBatch);
+    {
+        MemoryDBWriteBatch* rawBatch = static_cast<MemoryDBWriteBatch*>(writeBatch.get());
+        EXPECT_TRUE(!rawBatch->size());
+    }
 }
 
-BOOST_AUTO_TEST_SUITE_END()
+TEST(MemoryDB, insertAndKillSingleBatch)
+{
+    unique_ptr<MemoryDB> db(new MemoryDB());
+    ASSERT_TRUE(db);
+    unique_ptr<WriteBatchFace> writeBatch = db->createWriteBatch();
+    ASSERT_TRUE(writeBatch);
+    {
+        MemoryDBWriteBatch* rawBatch = static_cast<MemoryDBWriteBatch*>(writeBatch.get());
+
+        string testKey("foo");
+        string testVal("bar");
+
+        size_t insertedCount = 0;
+        rawBatch->insert(Slice(testKey), Slice(testVal));
+        EXPECT_EQ(++insertedCount, rawBatch->size());
+        rawBatch->kill(Slice(testKey));
+        EXPECT_EQ(--insertedCount, rawBatch->size());
+    }
+}
+
+TEST(MemoryDB, insertAndKillMultipleValuesBatch)
+{
+    unique_ptr<MemoryDB> db(new MemoryDB());
+    ASSERT_TRUE(db);
+    unique_ptr<WriteBatchFace> writeBatch = db->createWriteBatch();
+    ASSERT_TRUE(writeBatch);
+    {
+        MemoryDBWriteBatch* rawBatch = static_cast<MemoryDBWriteBatch*>(writeBatch.get());
+
+        // Insert keys/values into the batch
+        size_t insertedCount = 0;
+        for (auto const& data : g_testData)
+        {
+            rawBatch->insert(Slice(data.first), Slice(data.second));
+            EXPECT_EQ(++insertedCount, rawBatch->size());
+        }
+
+        // Kill keys/values from batch
+        for (auto const& data : g_testData)
+        {
+            rawBatch->kill(Slice(data.first));
+            EXPECT_EQ(--insertedCount, rawBatch->size());
+        }
+    }
+}
+
+// Write batch commit tests
+
+TEST(MemoryDB, commitEmptyBatch)
+{
+    unique_ptr<MemoryDB> db(new MemoryDB());
+    ASSERT_TRUE(db);
+    EXPECT_TRUE(!db->size());
+    unique_ptr<WriteBatchFace> writeBatch = db->createWriteBatch();
+    ASSERT_TRUE(writeBatch);
+    {
+        MemoryDBWriteBatch* rawBatch = static_cast<MemoryDBWriteBatch*>(writeBatch.get());
+        EXPECT_TRUE(!rawBatch->size());
+
+        db->commit(move(writeBatch));
+        EXPECT_TRUE(!db->size());
+    }
+}
+
+TEST(MemoryDB, commitMultipleValuesBatch)
+{
+    unique_ptr<MemoryDB> db(new MemoryDB());
+    ASSERT_TRUE(db);
+    unique_ptr<WriteBatchFace> writeBatch = db->createWriteBatch();
+    ASSERT_TRUE(writeBatch);
+
+    // Insert keys/values
+    size_t insertedCount = 0;
+    for (auto const& data : g_testData)
+    {
+        writeBatch->insert(Slice(data.first), Slice(data.second));
+        insertedCount++;
+    }
+
+    EXPECT_TRUE(!db->size());
+    db->commit(move(writeBatch));
+    EXPECT_EQ(insertedCount, db->size());
+    for (auto const& data : g_testData)
+    {
+        EXPECT_EQ(data.second, db->lookup(Slice(data.first)));
+    }
+}
+
+TEST(MemoryDB, commitMultipleBatches)
+{
+    unique_ptr<MemoryDB> db(new MemoryDB());
+    ASSERT_TRUE(db);
+    unique_ptr<WriteBatchFace> writeBatches[g_testData.size()];
+
+    size_t insertedCount = 0;
+    for (size_t i = 0; i < g_testData.size(); i++)
+    {
+        writeBatches[i] = db->createWriteBatch();
+        ASSERT_TRUE(writeBatches[i]);
+        writeBatches[i]->insert(Slice(g_testData[i].first), Slice(g_testData[i].second));
+        db->commit(move(writeBatches[i]));
+        EXPECT_EQ(++insertedCount, db->size());
+        EXPECT_EQ(g_testData[i].second, db->lookup(Slice(g_testData[i].first)));
+    }
+}

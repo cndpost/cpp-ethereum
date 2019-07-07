@@ -20,305 +20,284 @@
  * difficulty calculation tests.
  */
 
-#include <boost/test/unit_test.hpp>
 #include <test/tools/libtesteth/TestHelper.h>
 #include <test/tools/fuzzTesting/fuzzHelper.h>
 #include <libethashseal/Ethash.h>
 #include <libethashseal/GenesisInfo.h>
 #include <libethereum/ChainParams.h>
+#include <boost/filesystem/path.hpp>
 using namespace std;
 using namespace dev;
 using namespace dev::eth;
 
+namespace fs = boost::filesystem;
 namespace js = json_spirit;
 std::string const c_testDifficulty = R"(
  "DifficultyTest[N]" : {
 		"parentTimestamp" : "[PSTAMP]",
 		"parentDifficulty" : "[PDIFF]",
+		"parentUncles" : "[PUNCLS]",
 		"currentTimestamp" : "[СSTAMP]",
 		"currentBlockNumber" : "[CNUM]",
 		"currentDifficulty" : "[CDIFF]"
 	},
 )";
+h256 const nonzeroHash = sha3("whatever nonempty string");
 
-void checkCalculatedDifficulty(BlockHeader const& _bi, BlockHeader const& _parent, Network _n, ChainOperationParams const& _p, string const& _testName = "")
-{
-	u256 difficulty = _bi.difficulty();
-	u256 frontierDiff = _p.u256Param("homsteadForkBlock");
-
-	//The ultimate formula (Homestead)
-	if (_bi.number() > frontierDiff)
-	{
-		u256 minimumDifficulty = _p.u256Param("minimumDifficulty");
-		bigint block_diff = _parent.difficulty();
-
-		bigint a = (_parent.difficulty() / 2048);
-		int b = 1 - int(_bi.timestamp() - _parent.timestamp()) / 10;
-		bigint c = (_bi.number() / 100000) - 2;
-
-		block_diff += a * max<int>(b, -99);
-		block_diff += u256(1) << (unsigned)c;
-		block_diff = max<bigint>(minimumDifficulty, block_diff);
-
-		BOOST_CHECK_MESSAGE(difficulty == block_diff, "Homestead Check Calculated diff = " << difficulty << " expected diff = " << block_diff << _testName);
-		return;
-	}
-
-	u256 durationLimit;
-	u256 minimumDifficulty;
-	u256 difficultyBoundDivisor;
-	switch(_n)
-	{
-	case Network::MainNetwork:
-	case Network::FrontierTest:
-	case Network::HomesteadTest:
-	case Network::Ropsten:
-	case Network::TransitionnetTest:
-		durationLimit = 13;
-		minimumDifficulty = 131072;
-		difficultyBoundDivisor = 2048;
-	break;
-	default:
-		cerr << "testing undefined network difficulty";
-		durationLimit = _p.u256Param("durationLimit");
-		minimumDifficulty = _p.u256Param("minimumDifficulty");
-		difficultyBoundDivisor = _p.u256Param("difficultyBoundDivisor");
-		break;
-	}
-
-	//Frontier Era
-	bigint block_diff = _parent.difficulty();
-
-	bigint a = (_parent.difficulty() / difficultyBoundDivisor);
-	bigint b = ((_bi.timestamp() - _parent.timestamp()) < durationLimit) ?  1 : -1;
-	bigint c = (_bi.number() / 100000) - 2;
-
-	block_diff += a * b;
-	block_diff += u256(1) << (unsigned)c;
-	block_diff = max<bigint>(minimumDifficulty, block_diff);
-
-	BOOST_CHECK_MESSAGE(difficulty == block_diff, "Check Calculated diff = " << difficulty << " expected diff = " << block_diff << _testName);
-	return;
-}
-
-void fillDifficulty(string const& _testFileFullName, Ethash& _sealEngine)
+void fillDifficulty(boost::filesystem::path const& _testFileFullName, Ethash& _sealEngine)
 {
 	int testN = 0;
 	ostringstream finalTest;
-	finalTest << "{" << std::endl;
-	dev::test::TestOutputHelper::initTest(900);
+	finalTest << "{\n";
+	test::TestOutputHelper::get().initTest(900);
 
-	for (int stampDelta = 0; stampDelta < 45; stampDelta+=2)
+	for (int stampDelta = 0; stampDelta < 45; stampDelta += 2)
 	{
-		for (u256 blockNumber = 1; blockNumber < 1500000; blockNumber += 25000)
+		for (int pUncles = 0; pUncles < 2; pUncles++)
 		{
-			testN++;
-			string testName = "DifficultyTest"+toString(testN);
-			if (!dev::test::TestOutputHelper::passTest(testName))
-				continue;
+			for (int blockNumber = 100000; blockNumber < 5000000; blockNumber += 100000)
+			{
+				testN++;
+				string testName = "DifficultyTest"+toString(testN);
+				if (!test::TestOutputHelper::get().checkTest(testName))
+					continue;
 
-			u256 pStamp = dev::test::RandomCode::randomUniInt();
-			u256 pDiff = dev::test::RandomCode::randomUniInt();
-			u256 cStamp = pStamp + stampDelta;
-			u256 cNum = blockNumber;
+				// A random timestamp up to year 3048.
+				auto pStamp =
+					static_cast<int64_t>(test::RandomCode::get().randomUniInt(1, 34020247236));
+				u256 pDiff = test::RandomCode::get().randomUniInt();
+				int64_t cStamp = pStamp + stampDelta;
+				int cNum = blockNumber;
 
-			BlockHeader parent;
-			parent.setTimestamp(pStamp);
-			parent.setDifficulty(pDiff);
-			parent.setNumber(cNum - 1);
+				BlockHeader parent;
+				parent.setTimestamp(pStamp);
+				parent.setDifficulty(pDiff);
+				parent.setNumber(cNum - 1);
+				parent.setSha3Uncles((pUncles == 0) ? EmptyListSHA3 : nonzeroHash);
 
-			BlockHeader current;
-			current.setTimestamp(cStamp);
-			current.setNumber(cNum);
+				BlockHeader current;
+				current.setTimestamp(cStamp);
+				current.setNumber(cNum);
 
-			string tmptest = c_testDifficulty;
-			std::map<string, string> replaceMap;
-			replaceMap["[N]"] = toString(testN);
-			replaceMap["[PDIFF]"] = toCompactHexPrefixed(pDiff);
-			replaceMap["[PSTAMP]"] = toCompactHexPrefixed(pStamp);
-			replaceMap["[СSTAMP]"] = toCompactHexPrefixed(cStamp);
-			replaceMap["[CNUM]"] = toCompactHexPrefixed(cNum);
-			replaceMap["[CDIFF]"] = toCompactHexPrefixed(_sealEngine.calculateDifficulty(current, parent));
+				string tmptest = c_testDifficulty;
+				std::map<string, string> replaceMap;
+				replaceMap["[N]"] = toString(testN);
+				replaceMap["[PDIFF]"] = toCompactHexPrefixed(pDiff);
+				replaceMap["[PSTAMP]"] = toCompactHexPrefixed(pStamp);
+				replaceMap["[PUNCLS]"] = toCompactHexPrefixed(parent.sha3Uncles());
+				replaceMap["[СSTAMP]"] = toCompactHexPrefixed(cStamp);
+				replaceMap["[CNUM]"] = toCompactHexPrefixed(cNum);
+                replaceMap["[CDIFF]"] = toCompactHexPrefixed(
+                    calculateEthashDifficulty(_sealEngine.chainParams(), current, parent));
 
-			dev::test::RandomCode::parseTestWithTypes(tmptest, replaceMap);
-			finalTest << tmptest;
+                test::RandomCodeOptions defaultOptions;
+                test::RandomCode::get().parseTestWithTypes(tmptest, replaceMap, defaultOptions);
+				finalTest << tmptest;
+			}
 		}
 	}
 
-	finalTest << std::endl << "}";
+	finalTest << "\n}";
 	string testFile = finalTest.str();
 	testFile = testFile.replace(testFile.find_last_of(","), 1, "");
 	writeFile(_testFileFullName, asBytes(testFile));
 }
 
-void testDifficulty(string const& _testFileFullName, Ethash& _sealEngine, Network _n)
+void testDifficulty(fs::path const& _testFileFullName, Ethash& _sealEngine)
 {
 	//Test File
 	js::mValue v;
 	string s = contentsString(_testFileFullName);
 	BOOST_REQUIRE_MESSAGE(s.length() > 0, "Contents of '" << _testFileFullName << "' is empty. Have you cloned the 'tests' repo branch develop?");
 	js::read_string(s, v);
-	dev::test::TestOutputHelper::initTest(v);
+	test::TestOutputHelper::get().initTest(v.get_obj().size());
 
 	for (auto& i: v.get_obj())
 	{
 		js::mObject o = i.second.get_obj();
 		string testname = i.first;
-		if (!dev::test::TestOutputHelper::passTest(testname))
-		{
-			o.clear();
+		if (!test::TestOutputHelper::get().checkTest(testname))
 			continue;
-		}
+
+		BOOST_REQUIRE_MESSAGE(o.count("parentTimestamp") > 0, testname + " missing parentTimestamp field");
+		BOOST_REQUIRE_MESSAGE(o.count("parentDifficulty") > 0, testname + " missing parentDifficulty field");
+		BOOST_REQUIRE_MESSAGE(o.count("currentBlockNumber") > 0, testname + " missing currentBlockNumber field");
+		BOOST_REQUIRE_MESSAGE(o.count("parentUncles") > 0, testname + " missing parentUncles field");
+		BOOST_REQUIRE_MESSAGE(o.count("currentTimestamp") > 0, testname + " missing currentTimestamp field");
+		BOOST_REQUIRE_MESSAGE(o.count("currentBlockNumber") > 0, testname + " missing currentBlockNumber field");
+		BOOST_REQUIRE_MESSAGE(o.count("currentDifficulty") > 0, testname + " missing currentDifficulty field");
 
 		BlockHeader parent;
-		parent.setTimestamp(test::toInt(o["parentTimestamp"]));
-		parent.setDifficulty(test::toInt(o["parentDifficulty"]));
-		parent.setNumber(test::toInt(o["currentBlockNumber"]) - 1);
+        parent.setTimestamp(test::toUint64(o["parentTimestamp"]));
+        parent.setDifficulty(test::toU256(o["parentDifficulty"]));
+        parent.setNumber(test::toUint64(o["currentBlockNumber"]) - 1);
+        parent.setSha3Uncles(h256(o["parentUncles"].get_str()));
 
-		BlockHeader current;
-		current.setTimestamp(test::toInt(o["currentTimestamp"]));
-		current.setNumber(test::toInt(o["currentBlockNumber"]));
+        BlockHeader current;
+        current.setTimestamp(test::toUint64(o["currentTimestamp"]));
+        current.setNumber(test::toUint64(o["currentBlockNumber"]));
 
-		u256 difficulty = _sealEngine.calculateDifficulty(current, parent);
-		current.setDifficulty(difficulty);
-		BOOST_CHECK_EQUAL(difficulty, test::toInt(o["currentDifficulty"]));
-
-		//Manual formula test
-		checkCalculatedDifficulty(current, parent, _n, _sealEngine.chainParams(), "(" + i.first + ")");
-	}
-	dev::test::TestOutputHelper::finishTest();
+        u256 difficulty = calculateEthashDifficulty(_sealEngine.chainParams(), current, parent);
+        BOOST_CHECK_EQUAL(difficulty, test::toU256(o["currentDifficulty"]));
+    }
 }
 
 BOOST_AUTO_TEST_SUITE(DifficultyTests)
 
 BOOST_AUTO_TEST_CASE(difficultyTestsFrontier)
 {
-	string testFileFullName = test::getTestPath();
-	testFileFullName += "/BasicTests/difficultyFrontier.json";
+	fs::path const testFileFullName = test::getTestPath() / fs::path("BasicTests/difficultyFrontier.json");
 
 	Ethash sealEngine;
-	sealEngine.setChainParams(ChainParams(genesisInfo(Network::FrontierTest)));
+	sealEngine.setChainParams(ChainParams(genesisInfo(eth::Network::FrontierTest)));
 
 	if (dev::test::Options::get().filltests)
 		fillDifficulty(testFileFullName, sealEngine);
 
-	testDifficulty(testFileFullName, sealEngine, Network::FrontierTest);
+	testDifficulty(testFileFullName, sealEngine);
 }
 
 BOOST_AUTO_TEST_CASE(difficultyTestsRopsten)
 {
-	string testFileFullName = test::getTestPath();
-	testFileFullName += "/BasicTests/difficultyRopsten.json";
+	fs::path const testFileFullName = test::getTestPath() / fs::path("BasicTests/difficultyRopsten.json");
 
 	Ethash sealEngine;
-	sealEngine.setChainParams(ChainParams(genesisInfo(Network::Ropsten)));
+	sealEngine.setChainParams(ChainParams(genesisInfo(eth::Network::Ropsten)));
 
 	if (dev::test::Options::get().filltests)
 		fillDifficulty(testFileFullName, sealEngine);
 
-	testDifficulty(testFileFullName, sealEngine, Network::Ropsten);
+	testDifficulty(testFileFullName, sealEngine);
 }
 
 BOOST_AUTO_TEST_CASE(difficultyTestsHomestead)
 {
-	string testFileFullName = test::getTestPath();
-	testFileFullName += "/BasicTests/difficultyHomestead.json";
+	fs::path const testFileFullName = test::getTestPath() / fs::path("BasicTests/difficultyHomestead.json");
 
 	Ethash sealEngine;
-	sealEngine.setChainParams(ChainParams(genesisInfo(Network::HomesteadTest)));
+	sealEngine.setChainParams(ChainParams(genesisInfo(eth::Network::HomesteadTest)));
 
 	if (dev::test::Options::get().filltests)
 		fillDifficulty(testFileFullName, sealEngine);
 
-	testDifficulty(testFileFullName, sealEngine, Network::HomesteadTest);
+	testDifficulty(testFileFullName, sealEngine);
+}
+
+BOOST_AUTO_TEST_CASE(difficultyByzantium)
+{
+	fs::path const testFileFullName = test::getTestPath() / fs::path("BasicTests/difficultyByzantium.json");
+
+	Ethash sealEngine;
+	sealEngine.setChainParams(ChainParams(genesisInfo(eth::Network::ByzantiumTest)));
+
+	if (dev::test::Options::get().filltests)
+		fillDifficulty(testFileFullName, sealEngine);
+
+	testDifficulty(testFileFullName, sealEngine);
+}
+
+BOOST_AUTO_TEST_CASE(difficultyConstantinople)
+{
+    fs::path const testFileFullName = test::getTestPath() / fs::path("BasicTests/difficultyConstantinople.json");
+
+    Ethash sealEngine;
+    sealEngine.setChainParams(ChainParams(genesisInfo(eth::Network::ConstantinopleTest)));
+
+    if (dev::test::Options::get().filltests)
+        fillDifficulty(testFileFullName, sealEngine);
+
+    testDifficulty(testFileFullName, sealEngine);
 }
 
 BOOST_AUTO_TEST_CASE(difficultyTestsMainNetwork)
 {
-	string testFileFullName = test::getTestPath();
-	testFileFullName += "/BasicTests/difficultyMainNetwork.json";
+	fs::path const testFileFullName = test::getTestPath() / fs::path("BasicTests/difficultyMainNetwork.json");
 
 	Ethash sealEngine;
-	sealEngine.setChainParams(ChainParams(genesisInfo(Network::MainNetwork)));
+	sealEngine.setChainParams(ChainParams(genesisInfo(eth::Network::MainNetworkTest)));
 
 	if (dev::test::Options::get().filltests)
 		fillDifficulty(testFileFullName, sealEngine);
 
-	testDifficulty(testFileFullName, sealEngine, Network::MainNetwork);
+	testDifficulty(testFileFullName, sealEngine);
 }
 
 BOOST_AUTO_TEST_CASE(difficultyTestsCustomMainNetwork)
 {
-	string testFileFullName = test::getTestPath();
-	testFileFullName += "/BasicTests/difficultyCustomMainNetwork.json";
+	fs::path const testFileFullName = test::getTestPath() / fs::path("BasicTests/difficultyCustomMainNetwork.json");
 
 	Ethash sealEngine;
-	sealEngine.setChainParams(ChainParams(genesisInfo(Network::MainNetwork)));
+	sealEngine.setChainParams(ChainParams(genesisInfo(eth::Network::MainNetworkTest)));
 
 	if (dev::test::Options::get().filltests)
 	{
-		u256 homsteadBlockNumber = 1000000;
-		std::vector<u256> blockNumberVector = {homsteadBlockNumber - 100000, homsteadBlockNumber, homsteadBlockNumber + 100000};
+		int64_t byzantiumBlockNumber = 4370000;
+		std::vector<int64_t> blockNumberVector = {byzantiumBlockNumber - 100000, byzantiumBlockNumber, byzantiumBlockNumber + 100000};
 		std::vector<u256> parentDifficultyVector = {1000, 2048, 4000, 1000000};
 		std::vector<int> timestampDeltaVector = {0, 1, 8, 10, 13, 20, 100, 800, 1000, 1500};
 
 		int testN = 0;
 		ostringstream finalTest;
-		finalTest << "{" << std::endl;
+		finalTest << "{\n";
 
 		for (size_t bN = 0; bN < blockNumberVector.size(); bN++)
 			for (size_t pdN = 0; pdN < parentDifficultyVector.size(); pdN++)
-				for (size_t tsN = 0; tsN < timestampDeltaVector.size(); tsN++)
-				{
-					testN++;
-					int stampDelta = timestampDeltaVector.at(tsN);
-					u256 blockNumber = blockNumberVector.at(bN);
-					u256 pDiff = parentDifficultyVector.at(pdN);
+				for (int pUncles = 0; pUncles < 3; pUncles++)
+					for (size_t tsN = 0; tsN < timestampDeltaVector.size(); tsN++)
+					{
+						testN++;
+						int stampDelta = timestampDeltaVector.at(tsN);
+						int64_t blockNumber = blockNumberVector.at(bN);
+						u256 pDiff = parentDifficultyVector.at(pdN);
 
-					u256 pStamp = dev::test::RandomCode::randomUniInt();
-					u256 cStamp = pStamp + stampDelta;
-					u256 cNum = blockNumber;
+						auto cStamp = static_cast<int64_t>(test::RandomCode::get().randomUniInt(timestampDeltaVector.back()));
+						int64_t pStamp = cStamp - stampDelta;
+                        int64_t cNum = blockNumber;
 
-					BlockHeader parent;
-					parent.setTimestamp(pStamp);
-					parent.setDifficulty(pDiff);
-					parent.setNumber(cNum - 1);
+						BlockHeader parent;
+						parent.setTimestamp(pStamp);
+						parent.setDifficulty(pDiff);
+						parent.setNumber(cNum - 1);
 
-					BlockHeader current;
-					current.setTimestamp(cStamp);
-					current.setNumber(cNum);
+						parent.setSha3Uncles((pUncles == 0) ? EmptyListSHA3 : nonzeroHash);
 
-					string tmptest = c_testDifficulty;
-					std::map<string, string> replaceMap;
-					replaceMap["[N]"] = toString(testN);
-					replaceMap["[PDIFF]"] = toCompactHexPrefixed(pDiff);
-					replaceMap["[PSTAMP]"] = toCompactHexPrefixed(pStamp);
-					replaceMap["[СSTAMP]"] = toCompactHexPrefixed(cStamp);
-					replaceMap["[CNUM]"] = toCompactHexPrefixed(cNum);
-					replaceMap["[CDIFF]"] = toCompactHexPrefixed(sealEngine.calculateDifficulty(current, parent));
+						BlockHeader current;
+						current.setTimestamp(cStamp);
+						current.setNumber(cNum);
 
-					dev::test::RandomCode::parseTestWithTypes(tmptest, replaceMap);
-					finalTest << tmptest;
-				}
+						string tmptest = c_testDifficulty;
+						std::map<string, string> replaceMap;
+						replaceMap["[N]"] = toString(testN);
+						replaceMap["[PDIFF]"] = toCompactHexPrefixed(pDiff);
+						replaceMap["[PSTAMP]"] = toCompactHexPrefixed(pStamp);
+						replaceMap["[PUNCLS]"] = toCompactHexPrefixed(parent.sha3Uncles());
+						replaceMap["[СSTAMP]"] = toCompactHexPrefixed(cStamp);
+						replaceMap["[CNUM]"] = toCompactHexPrefixed(cNum);
+                        replaceMap["[CDIFF]"] = toCompactHexPrefixed(
+                            calculateEthashDifficulty(sealEngine.chainParams(), current, parent));
 
-		finalTest << std::endl << "}";
+                        test::RandomCodeOptions defaultOptions;
+                        test::RandomCode::get().parseTestWithTypes(tmptest, replaceMap, defaultOptions);
+						finalTest << tmptest;
+					}
+
+		finalTest << "\n}";
 		string testFile = finalTest.str();
 		testFile = testFile.replace(testFile.find_last_of(","), 1, "");
 		writeFile(testFileFullName, asBytes(testFile));
 	}
 
-	testDifficulty(testFileFullName, sealEngine, Network::MainNetwork);
+	testDifficulty(testFileFullName, sealEngine);
 }
 
 BOOST_AUTO_TEST_CASE(basicDifficultyTest)
 {
-	string testPath = test::getTestPath();
-	testPath += "/BasicTests/difficulty.json";
+	fs::path const testPath = test::getTestPath() / fs::path("BasicTests/difficulty.json");
 
 	Ethash sealEngine;
-	sealEngine.setChainParams(ChainParams(genesisInfo(Network::MainNetwork)));
+	sealEngine.setChainParams(ChainParams(genesisInfo(eth::Network::MainNetwork)));
 
-	testDifficulty(testPath, sealEngine, Network::MainNetwork);
+	testDifficulty(testPath, sealEngine);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

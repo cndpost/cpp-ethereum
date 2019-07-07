@@ -25,7 +25,7 @@
 #include <libdevcore/TrieHash.h>
 #include <libdevcore/TransientDirectory.h>
 #include "MemTrie.h"
-#include <test/tools/libtesteth/TestHelper.h>
+#include <test/tools/libtesteth/TestOutputHelper.h>
 using namespace std;
 using namespace dev;
 using namespace dev::test;
@@ -36,17 +36,17 @@ namespace utf = boost::unit_test;
 
 BOOST_AUTO_TEST_SUITE(Crypto)
 
-BOOST_FIXTURE_TEST_SUITE(KeyStore, TestOutputHelper)
+BOOST_FIXTURE_TEST_SUITE(KeyStore, TestOutputHelperFixture)
 
 BOOST_AUTO_TEST_CASE(basic_tests)
 {
-	string testPath = test::getTestPath();
+	fs::path testPath = test::getTestPath();
 
-	testPath += "/KeyStoreTests";
+	testPath /= fs::path("KeyStoreTests");
 
 	cnote << "Testing Key Store...";
 	js::mValue v;
-	string s = contentsString(testPath + "/basic_tests.json");
+	string const s = contentsString(testPath / fs::path("basic_tests.json"));
 	BOOST_REQUIRE_MESSAGE(s.length() > 0, "Contents of 'KeyStoreTests/basic_tests.json' is empty. Have you cloned the 'tests' repo branch develop?");
 	js::read_string(s, v);
 	for (auto& i: v.get_obj())
@@ -216,7 +216,7 @@ BOOST_AUTO_TEST_CASE(recode)
 	}
 }
 
-BOOST_AUTO_TEST_CASE(keyImport_PBKDF2SHA256, *utf::expected_failures(1))
+BOOST_AUTO_TEST_CASE(keyImport_PBKDF2SHA256)
 {
 	// Imports a key from an external file. Tests that the imported key is there
 	// and that the external file is not deleted.
@@ -255,7 +255,7 @@ BOOST_AUTO_TEST_CASE(keyImport_PBKDF2SHA256, *utf::expected_failures(1))
 	fs::remove(importFile);
 }
 
-BOOST_AUTO_TEST_CASE(keyImport_Scrypt, *utf::expected_failures(1))
+BOOST_AUTO_TEST_CASE(keyImport_Scrypt)
 {
 	// Imports a key from an external file. Tests that the imported key is there
 	// and that the external file is not deleted.
@@ -294,7 +294,7 @@ BOOST_AUTO_TEST_CASE(keyImport_Scrypt, *utf::expected_failures(1))
 	fs::remove(importFile);
 }
 
-BOOST_AUTO_TEST_CASE(keyImport__ScryptV2, *utf::expected_failures(2))
+BOOST_AUTO_TEST_CASE(keyImport__ScryptV2, *utf::expected_failures(2) *utf::disabled())
 {
 	// Imports a key from an external file. Tests that the imported key is there
 	// and that the external file is not deleted.

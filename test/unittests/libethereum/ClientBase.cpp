@@ -22,7 +22,7 @@
 #include <boost/test/unit_test.hpp>
 #include <libdevcore/CommonJS.h>
 #include <libethashseal/Ethash.h>
-#include <test/tools/libtesteth/TestHelper.h>
+#include <test/tools/libtesteth/TestOutputHelper.h>
 #include <test/tools/libtesteth/TestUtils.h>
 #include <test/tools/libtestutils/FixedClient.h>
 
@@ -35,7 +35,6 @@ BOOST_FIXTURE_TEST_SUITE(ClientBase, ParallelClientBaseFixture)
 
 BOOST_AUTO_TEST_CASE(blocks)
 {
-	test::TestOutputHelper::initTest();
 	enumerateClients([](Json::Value const& _json, dev::eth::ClientBase& _client) -> void
 	{
 		auto compareState = [&_client](Json::Value const& _o, string const& _name, BlockNumber _blockNumber) -> void
@@ -114,7 +113,7 @@ BOOST_AUTO_TEST_CASE(blocks)
 				u256 expectedBlockInfoGasUsed = u256(_b["gasUsed"].asString());
 				h256 expectedBlockInfoHash = h256(fromHex(_b["hash"].asString()));
 				h256 expectedBlockInfoMixHash = h256(fromHex(_b["mixHash"].asString()));
-				Nonce expectedBlockInfoNonce = Nonce(fromHex(_b["nonce"].asString()));
+				eth::Nonce expectedBlockInfoNonce = eth::Nonce(fromHex(_b["nonce"].asString()));
 				u256 expectedBlockInfoNumber = u256(_b["number"].asString());
 				h256 expectedBlockInfoParentHash = h256(fromHex(_b["parentHash"].asString()));
 				h256 expectedBlockInfoReceiptsRoot = h256(fromHex(_b["receiptTrie"].asString()));

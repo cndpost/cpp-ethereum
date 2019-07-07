@@ -14,13 +14,10 @@
 	You should have received a copy of the GNU General Public License
 	along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
  */
-/** @file
- */
 
 #include <thread>
 #include <boost/test/unit_test.hpp>
 #include <boost/filesystem.hpp>
-#include <libdevcrypto/Common.h>
 #include <test/tools/libtestutils/Common.h>
 #include <test/tools/libtestutils/BlockChainLoader.h>
 #include <test/tools/libtestutils/FixedClient.h>
@@ -76,14 +73,12 @@ void ParallelFixture::enumerateThreads(std::function<void()> callback) const
 {
 	size_t threadsCount = std::stoul(getCommandLineArgument("--eth_threads"), nullptr, 10);
 	
-	vector<thread> workers;
+	std::vector<std::thread> workers;
 	for (size_t i = 0; i < threadsCount; i++)
 		workers.emplace_back(callback);
-	
-	for_each(workers.begin(), workers.end(), [](thread &t)
-	{
+
+	for (std::thread& t : workers)
 		t.join();
-	});
 }
 
 void BlockChainFixture::enumerateBlockchains(std::function<void(Json::Value const&, dev::eth::BlockChain const&, State state)> callback) const

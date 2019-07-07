@@ -47,10 +47,15 @@ class SealEngineFace
 public:
 	virtual ~SealEngineFace() {}
 
-	virtual std::string name() const = 0;
-	virtual unsigned revision() const { return 0; }
-	virtual unsigned sealFields() const { return 0; }
-	virtual bytes sealRLP() const { return bytes(); }
+	/// @returns Tuple of hash of the current block to be mined minus nonce, seed hash, target boundary.
+    virtual std::tuple<h256, h256, h256> getWork(BlockHeader const&)
+    {
+        return std::tuple<h256, h256, h256>{};
+    }
+    virtual bool isMining() const { return false; }
+    virtual unsigned revision() const { return 0; }
+    virtual unsigned sealFields() const { return 0; }
+    virtual bytes sealRLP() const { return bytes(); }
 	virtual StringHashMap jsInfo(BlockHeader const&) const { return StringHashMap(); }
 
 	/// Don't forget to call Super::verify when subclassing & overriding.
@@ -76,6 +81,7 @@ public:
 	void setChainParams(ChainOperationParams const& _params) { m_params = _params; }
 	SealEngineFace* withChainParams(ChainOperationParams const& _params) { setChainParams(_params); return this; }
 	virtual EVMSchedule const& evmSchedule(u256 const& _blockNumber) const = 0;
+	virtual u256 blockReward(u256 const& _blockNumber) const = 0;
 
 	virtual bool isPrecompiled(Address const& _a, u256 const& _blockNumber) const
 	{
@@ -97,15 +103,14 @@ private:
 class SealEngineBase: public SealEngineFace
 {
 public:
-	void generateSeal(BlockHeader const& _bi) override
-	{
-		RLPStream ret;
-		_bi.streamRLP(ret);
-		if (m_onSealGenerated)
-			m_onSealGenerated(ret.out());
-	}
-	void onSealGenerated(std::function<void(bytes const&)> const& _f) override { m_onSealGenerated = _f; }
+    enum
+    {
+        MixHashField = 0,
+        NonceField = 1
+    };
+    void onSealGenerated(std::function<void(bytes const&)> const& _f) override { m_onSealGenerated = _f; }
 	EVMSchedule const& evmSchedule(u256 const& _blockNumber) const override;
+	u256 blockReward(u256 const& _blockNumber) const override;
 
 protected:
 	std::function<void(bytes const& s)> m_onSealGenerated;
@@ -136,9 +141,18 @@ private:
 class NoProof: public eth::SealEngineBase
 {
 public:
-	std::string name() const override { return "NoProof"; }
-	static void init();
+    static std::string name() { return "NoProof"; }
+    static void init();
+    void generateSeal(BlockHeader const& _bi) override;
+    void populateFromParent(BlockHeader& _bi, BlockHeader const& _parent) const override;
+    void verify(Strictness _s, BlockHeader const& _bi, BlockHeader const& _parent, bytesConstRef _block) const override;
+    StringHashMap jsInfo(BlockHeader const& _bi) const override;
 };
 
+u256 calculateEthashDifficulty(
+    ChainOperationParams const& _chainParams, BlockHeader const& _bi, BlockHeader const& _parent);
+
+u256 calculateGasLimit(ChainOperationParams const& _chainParams, BlockHeader const& _bi,
+    u256 const& _gasFloorTarget = Invalid256);
 }
 }

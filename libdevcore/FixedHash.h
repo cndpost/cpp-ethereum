@@ -26,8 +26,7 @@
 #include <array>
 #include <cstdint>
 #include <algorithm>
-#include <boost/random/random_device.hpp>
-#include <boost/random/uniform_int_distribution.hpp>
+#include <random>
 #include <boost/functional/hash.hpp>
 #include "CommonData.h"
 
@@ -38,7 +37,7 @@ namespace dev
 template <unsigned N> struct StaticLog2 { enum { result = 1 + StaticLog2<N/2>::result }; };
 template <> struct StaticLog2<1> { enum { result = 0 }; };
 
-extern boost::random_device s_fixedHashEngine;
+extern std::random_device s_fixedHashEngine;
 
 /// Fixed-size raw-byte array container type, with an API optimised for storing hashes.
 /// Transparently converts to/from the corresponding arithmetic type; this will
@@ -161,7 +160,7 @@ public:
 	void randomize(Engine& _eng)
 	{
 		for (auto& i: m_data)
-			i = (uint8_t)boost::random::uniform_int_distribution<uint16_t>(0, 255)(_eng);
+			i = (uint8_t)std::uniform_int_distribution<uint16_t>(0, 255)(_eng);
 	}
 
 	/// @returns a random valued object.
@@ -211,10 +210,13 @@ public:
 		unsigned ret = 0;
 		for (auto d: m_data)
 			if (d)
+			{
 				for (;; ++ret, d <<= 1)
+				{
 					if (d & 0x80)
 						return ret;
-					else {}
+				}
+			}
 			else
 				ret += 8;
 		return ret;
@@ -240,7 +242,7 @@ public:
 	template <unsigned M> explicit SecureFixedHash(FixedHash<M> const& _h, ConstructFromHashType _t = FixedHash<T>::AlignLeft): FixedHash<T>(_h, _t) {}
 	template <unsigned M> explicit SecureFixedHash(SecureFixedHash<M> const& _h, ConstructFromHashType _t = FixedHash<T>::AlignLeft): FixedHash<T>(_h.makeInsecure(), _t) {}
 	explicit SecureFixedHash(std::string const& _s, ConstructFromStringType _t = FixedHash<T>::FromHex, ConstructFromHashType _ht = FixedHash<T>::FailIfDifferent): FixedHash<T>(_s, _t, _ht) {}
-	explicit SecureFixedHash(bytes const* _d, ConstructFromPointerType _t): FixedHash<T>(_d, _t) {}
+	explicit SecureFixedHash(byte const* _d, ConstructFromPointerType _t): FixedHash<T>(_d, _t) {}
 	~SecureFixedHash() { ref().cleanse(); }
 
 	SecureFixedHash<T>& operator=(SecureFixedHash<T> const& _c)
@@ -327,6 +329,15 @@ inline std::ostream& operator<<(std::ostream& _out, FixedHash<N> const& _h)
 	return _out;
 }
 
+template <unsigned N>
+inline std::istream& operator>>(std::istream& _in, FixedHash<N>& o_h)
+{
+	std::string s;
+	_in >> s;
+	o_h = FixedHash<N>(s, FixedHash<N>::FromHex, FixedHash<N>::AlignRight);
+	return _in;
+}
+
 /// Stream I/O for the SecureFixedHash class.
 template <unsigned N>
 inline std::ostream& operator<<(std::ostream& _out, SecureFixedHash<N> const& _h)
@@ -357,14 +368,6 @@ inline h160 right160(h256 const& _t)
 {
 	h160 ret;
 	memcpy(ret.data(), _t.data() + 12, 20);
-	return ret;
-}
-
-/// Convert the given value into h160 (160-bit unsigned integer) using the left 20 bytes.
-inline h160 left160(h256 const& _t)
-{
-	h160 ret;
-	memcpy(&ret[0], _t.data(), 20);
 	return ret;
 }
 

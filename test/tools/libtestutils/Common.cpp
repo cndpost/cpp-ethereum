@@ -1,92 +1,81 @@
-/*
-	This file is part of cpp-ethereum.
- 
-	cpp-ethereum is free software: you can redistribute it and/or modify
-	it under the terms of the GNU General Public License as published by
-	the Free Software Foundation, either version 3 of the License, or
-	(at your option) any later version.
- 
-	cpp-ethereum is distributed in the hope that it will be useful,
-	but WITHOUT ANY WARRANTY; without even the implied warranty of
-	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-	GNU General Public License for more details.
- 
-	You should have received a copy of the GNU General Public License
-	along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
- */
-/** @file Common.cpp
- * @author Marek Kotewicz <marek@ethdev.com>
- * @date 2015
- */
+// Aleth: Ethereum C++ client, tools and libraries.
+// Copyright 2019 Aleth Authors.
+// Licensed under the GNU General Public License, Version 3.
 
-#include <random>
-#include <boost/filesystem.hpp>
+#include "Common.h"
 #include <libdevcore/CommonData.h>
 #include <libdevcore/CommonIO.h>
 #include <libdevcore/FileSystem.h>
 #include <test/tools/libtesteth/Options.h>
-#include "Common.h"
+#include <boost/filesystem.hpp>
+#include <random>
 
 using namespace std;
 using namespace dev;
 using namespace dev::test;
+namespace fs = boost::filesystem;
 
-const char* TestChannel::name() { return "TST"; }
-
-std::string dev::test::getTestPath()
+namespace
 {
-	if (!Options::get().testpath.empty())
-		return Options::get().testpath;
-
-	string testPath;
-	const char* ptestPath = getenv("ETHEREUM_TEST_PATH");
-
-	if (ptestPath == NULL)
-	{
-		ctest << " could not find environment variable ETHEREUM_TEST_PATH \n";
-		testPath = "../../test/jsontests";
-	}
-	else
-		testPath = ptestPath;
-
-	return testPath;
+mt19937_64 g_randomGenerator(random_device{}());
 }
 
-int dev::test::randomNumber()
+boost::filesystem::path dev::test::getTestPath()
 {
-	static std::mt19937 randomGenerator(utcTime());
-	randomGenerator.seed(std::random_device()());
-	return std::uniform_int_distribution<int>(1)(randomGenerator);
+    if (!Options::get().testpath.empty())
+        return Options::get().testpath;
+
+    string testPath;
+    const char* ptestPath = getenv("ETHEREUM_TEST_PATH");
+
+    if (ptestPath == nullptr)
+    {
+        clog(VerbosityWarning, "test")
+            << " could not find environment variable ETHEREUM_TEST_PATH \n";
+        testPath = "../../test/jsontests";
+    }
+    else
+        testPath = ptestPath;
+
+    return boost::filesystem::path(testPath);
 }
 
-Json::Value dev::test::loadJsonFromFile(std::string const& _path)
+int dev::test::randomNumber(int _min, int _max)
 {
-	Json::Reader reader;
-	Json::Value result;
-	string s = dev::contentsString(_path);
-	if (!s.length())
-		ctest << "Contents of " + _path + " is empty. Have you cloned the 'tests' repo branch develop and set ETHEREUM_TEST_PATH to its path?";
-	else
-		ctest << "FIXTURE: loaded test from file: " << _path;
-	
-	reader.parse(s, result);
-	return result;
+    return std::uniform_int_distribution<int>{_min, _max}(g_randomGenerator);
 }
 
-std::string dev::test::toTestFilePath(std::string const& _filename)
+unsigned short dev::test::randomPortNumber(unsigned short _min, unsigned short _max)
 {
-	return getTestPath() + "/" + _filename + ".json";
+    return std::uniform_int_distribution<unsigned short>{_min, _max}(g_randomGenerator);
 }
 
-std::string dev::test::getFolder(std::string const& _file)
+Json::Value dev::test::loadJsonFromFile(fs::path const& _path)
 {
-	return boost::filesystem::path(_file).parent_path().string();
+    Json::Reader reader;
+    Json::Value result;
+    string s = dev::contentsString(_path);
+    if (!s.length())
+        clog(VerbosityWarning, "test")
+            << "Contents of " << _path.string()
+            << " is empty. Have you cloned the 'tests' repo branch develop and "
+               "set ETHEREUM_TEST_PATH to its path?";
+    else
+        clog(VerbosityWarning, "test") << "FIXTURE: loaded test from file: " << _path.string();
+
+    reader.parse(s, result);
+    return result;
 }
 
-std::string dev::test::getRandomPath()
+fs::path dev::test::toTestFilePath(std::string const& _filename)
 {
-	std::stringstream stream;
-	stream << getDataDir("EthereumTests") << "/" << randomNumber();
-	return stream.str();
+    return getTestPath() / fs::path(_filename + ".json");
+}
+
+fs::path dev::test::getRandomPath()
+{
+    std::stringstream stream;
+    stream << randomNumber();
+    return getDataDir("EthereumTests") / fs::path(stream.str());
 }
 

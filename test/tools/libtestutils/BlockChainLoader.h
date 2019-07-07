@@ -20,7 +20,6 @@
  */
 
 #pragma once
-#include <string>
 #include <json/json.h>
 #include <libdevcore/TransientDirectory.h>
 #include <libethereum/BlockChain.h>
@@ -39,7 +38,7 @@ namespace test
 class BlockChainLoader
 {
 public:
-	BlockChainLoader(Json::Value const& _json, eth::Network _sealEngineNetwork = eth::Network::TransitionnetTest);
+	explicit BlockChainLoader(Json::Value const& _json, eth::Network _sealEngineNetwork = eth::Network::TransitionnetTest);
 	eth::BlockChain const& bc() const { return *m_bc; }
 	eth::State const& state() const { return m_block.state(); }	// TODO remove?
 	eth::Block const& block() const { return m_block; }
