@@ -18,7 +18,7 @@
 #include "interpreter.h"
 #include "VM.h"
 
-#include <aleth/buildinfo.h>
+#include <aleth/version.h>
 
 namespace
 {
@@ -116,7 +116,7 @@ extern "C" evmc_instance* evmc_create_interpreter() noexcept
     static evmc_instance s_instance{
         EVMC_ABI_VERSION,
         "interpreter",
-        aleth_get_buildinfo()->project_version,
+        aleth_version,
         ::destroy,
         ::execute,
         getCapabilities,
@@ -445,7 +445,9 @@ void VM::interpretCases()
 
             uint64_t inOff = (uint64_t)m_SP[0];
             uint64_t inSize = (uint64_t)m_SP[1];
-            m_SPP[0] = (u256)sha3(bytesConstRef(m_mem.data() + inOff, inSize));
+
+            const auto h = ethash::keccak256(m_mem.data() + inOff, inSize);
+            m_SPP[0] = static_cast<u256>(h256{h.bytes, h256::ConstructFromPointer});
         }
         NEXT
 

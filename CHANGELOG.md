@@ -12,7 +12,8 @@
 - Added: [#5588](https://github.com/ethereum/aleth/pull/5588) Testeth prints similar test suite name suggestions, when the name passed in `-t` argument is not found.
 - Added: [#5593](https://github.com/ethereum/aleth/pull/5593) Dynamically updating host ENR.
 - Added: [#5624](https://github.com/ethereum/aleth/pull/5624) Remove useless peers from peer list.
-- Added: [#5634](https://github.com/ethereum/aleth/pull/5634) Bootnodes for Rinkeby and Goerli
+- Added: [#5634](https://github.com/ethereum/aleth/pull/5634) Bootnodes for Rinkeby and Goerli.
+- Added: [#5640](https://github.com/ethereum/aleth/pull/5640) Istanbul support: EIP-1702 Generalized Account Versioning Scheme.
 - Changed: [#5532](https://github.com/ethereum/aleth/pull/5532) The leveldb is upgraded to 1.22. This is breaking change on Windows and the old databases are not compatible.
 - Changed: [#5559](https://github.com/ethereum/aleth/pull/5559) Update peer validation error messages.
 - Changed: [#5568](https://github.com/ethereum/aleth/pull/5568) Improve rlpx handshake log messages and create new rlpx log channel.
@@ -23,6 +24,7 @@
 - Changed: [#5605](https://github.com/ethereum/aleth/pull/5605) Network logging bugfixes and improvements and add warpcap log channel.
 - Changed: [#5628](https://github.com/ethereum/aleth/pull/5628) Don't try to endlessly reconnect to official Ethereum bootnodes.
 - Changed: [#5632](https://github.com/ethereum/aleth/pull/5632) RocksDB support is disabled by default. Enable with `-DROCKSB=ON` CMake option.
+- Removed: [#5631](https://github.com/ethereum/aleth/pull/5631) Removed PARANOID build option.
 - Fixed: [#5562](https://github.com/ethereum/aleth/pull/5562) Don't send header request messages to peers that haven't sent us Status yet.
 - Fixed: [#5581](https://github.com/ethereum/aleth/pull/5581) Fixed finding neighbour nodes in Discovery.
 - Fixed: [#5599](https://github.com/ethereum/aleth/pull/5600) Prevent aleth from attempting concurrent connection to node which results in disconnect of original connection.

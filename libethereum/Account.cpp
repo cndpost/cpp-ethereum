@@ -34,11 +34,16 @@ using namespace dev::eth::validation;
 
 namespace fs = boost::filesystem;
 
-void Account::setCode(bytes&& _code)
+void Account::setCode(bytes&& _code, u256 const& _version)
 {
-    m_codeCache = std::move(_code);
-    m_hasNewCode = true;
-    m_codeHash = sha3(m_codeCache);
+    auto const newHash = sha3(_code);
+    if (newHash != m_codeHash)
+    {
+        m_codeCache = std::move(_code);
+        m_hasNewCode = true;
+        m_codeHash = newHash;
+    }
+    m_version = _version;
 }
 
 void Account::resetCode()
@@ -46,6 +51,8 @@ void Account::resetCode()
     m_codeCache.clear();
     m_hasNewCode = false;
     m_codeHash = EmptySHA3;
+    // Reset the version, as it was set together with code
+    m_version = 0;
 }
 
 u256 Account::originalStorageValue(u256 const& _key, OverlayDB const& _db) const
@@ -162,7 +169,7 @@ AccountMap dev::eth::jsonToAccountMap(std::string const& _json, u256 const& _def
                         cerr << "Error importing code of account " << a
                              << "! Code needs to be hex bytecode prefixed by \"0x\".";
                     else
-                        ret[a].setCode(fromHex(codeStr));
+                        ret[a].setCode(fromHex(codeStr), 0);
                 }
                 else
                     cerr << "Error importing code of account " << a
@@ -182,7 +189,7 @@ AccountMap dev::eth::jsonToAccountMap(std::string const& _json, u256 const& _def
                     if (code.empty())
                         cerr << "Error importing code of account " << a << "! Code file "
                              << codePath << " empty or does not exist.\n";
-                    ret[a].setCode(std::move(code));
+                    ret[a].setCode(std::move(code), 0);
                 }
                 else
                     cerr << "Error importing code of account " << a
